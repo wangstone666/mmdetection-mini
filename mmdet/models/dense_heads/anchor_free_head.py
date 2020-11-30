@@ -1,5 +1,4 @@
 from abc import abstractmethod
-
 import torch
 import torch.nn as nn
 from mmdet.cv_core.cnn import ConvModule, bias_init_with_prob, normal_init
@@ -35,25 +34,16 @@ class AnchorFreeHead(BaseDenseHead, BBoxTestMixin):
 
     _version = 1
 
-    def __init__(self,
-                 num_classes,
-                 in_channels,
-                 feat_channels=256,
-                 stacked_convs=4,
-                 strides=(4, 8, 16, 32, 64),
-                 dcn_on_last_conv=False,
-                 conv_bias='auto',
+    def __init__(self,num_classes,in_channels,feat_channels=256,stacked_convs=4,
+                 strides=(4, 8, 16, 32, 64),dcn_on_last_conv=False,conv_bias='auto',
                  loss_cls=dict(
                      type='FocalLoss',
                      use_sigmoid=True,
                      gamma=2.0,
                      alpha=0.25,
                      loss_weight=1.0),
-                 loss_bbox=dict(type='IoULoss', loss_weight=1.0),
-                 conv_cfg=None,
-                 norm_cfg=None,
-                 train_cfg=None,
-                 test_cfg=None):
+                 loss_bbox=dict(type='IoULoss', loss_weight=1.0),conv_cfg=None,
+                 norm_cfg=None,train_cfg=None, test_cfg=None):
         super(AnchorFreeHead, self).__init__()
         self.num_classes = num_classes
         self.cls_out_channels = num_classes
@@ -83,7 +73,7 @@ class AnchorFreeHead(BaseDenseHead, BBoxTestMixin):
     def _init_cls_convs(self):
         """Initialize classification conv layers of the head."""
         self.cls_convs = nn.ModuleList()
-        for i in range(self.stacked_convs):
+        for i in range(self.stacked_convs):   #  对FCOS来说表示有几个3x3大熊啊的卷积核
             chn = self.in_channels if i == 0 else self.feat_channels
             if self.dcn_on_last_conv and i == self.stacked_convs - 1:
                 conv_cfg = dict(type='DCNv2')
@@ -218,13 +208,7 @@ class AnchorFreeHead(BaseDenseHead, BBoxTestMixin):
         return cls_score, bbox_pred, cls_feat, reg_feat
 
     @abstractmethod
-    def loss(self,
-             cls_scores,
-             bbox_preds,
-             gt_bboxes,
-             gt_labels,
-             img_metas,
-             gt_bboxes_ignore=None):
+    def loss(self,cls_scores,bbox_preds,gt_bboxes,gt_labels,img_metas,gt_bboxes_ignore=None):
         """Compute loss of the head.
 
         Args:
@@ -246,12 +230,7 @@ class AnchorFreeHead(BaseDenseHead, BBoxTestMixin):
         raise NotImplementedError
 
     @abstractmethod
-    def get_bboxes(self,
-                   cls_scores,
-                   bbox_preds,
-                   img_metas,
-                   cfg=None,
-                   rescale=None):
+    def get_bboxes(self,cls_scores,bbox_preds,img_metas,cfg=None,rescale=None):
         """Transform network output for a batch into bbox predictions.
 
         Args:
@@ -283,12 +262,7 @@ class AnchorFreeHead(BaseDenseHead, BBoxTestMixin):
         """
         raise NotImplementedError
 
-    def _get_points_single(self,
-                           featmap_size,
-                           stride,
-                           dtype,
-                           device,
-                           flatten=False):
+    def _get_points_single(self,featmap_size,stride,dtype,device,flatten=False):
         """Get points of a single scale level."""
         h, w = featmap_size
         x_range = torch.arange(w, dtype=dtype, device=device)
@@ -312,9 +286,7 @@ class AnchorFreeHead(BaseDenseHead, BBoxTestMixin):
         """
         mlvl_points = []
         for i in range(len(featmap_sizes)):
-            mlvl_points.append(
-                self._get_points_single(featmap_sizes[i], self.strides[i],
-                                        dtype, device, flatten))
+            mlvl_points.append(self._get_points_single(featmap_sizes[i], self.strides[i],dtype, device, flatten))
         return mlvl_points
 
     def aug_test(self, feats, img_metas, rescale=False):

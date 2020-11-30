@@ -8,26 +8,22 @@ from mmdet.cv_core.cnn import Scale, normal_init
 from mmdet.det_core import distance2bbox, multi_apply, multiclass_nms
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
-
+'''
+fcos fpn 划分特征等级的正无穷
+'''
 INF = 1e8
 
 
 @HEADS.register_module()
 class FCOSHead(AnchorFreeHead):
     """Anchor-free head used in `FCOS <https://arxiv.org/abs/1904.01355>`_.
-
-    The FCOS head does not use anchor boxes. Instead bounding boxes are
-    predicted at each pixel and a centerness measure is used to supress
-    low-quality predictions.
-    Here norm_on_bbox, centerness_on_reg, dcn_on_last_conv are training
-    tricks used in official repo, which will bring remarkable mAP gains
-    of up to 4.9. Please see https://github.com/tianzhi0549/FCOS for
-    more detail.
-
+    FCOS head 不使用anchor，对每个像素点进行预测，并使用centerness一直低质量的预测 
+    norm_on_bbox, centerness_on_reg, dcn_on_last_conv是官方仓库中的训练tricks，
+    mAP带来了4.9个点的提升，Please see https://github.com/tianzhi0549/FCOS for
+    more detail. 
     Args:
-        num_classes (int): Number of categories excluding the background
-            category.
-        in_channels (int): Number of channels in the input feature map.
+        num_classes (int): 类别数(包括背景类)           
+        in_channels (int): 输入特征图的通道数
         strides (list[int] | list[tuple[int, int]]): Strides of points
             in multiple feature levels. Default: (4, 8, 16, 32, 64).
         regress_ranges (tuple[tuple[int, int]]): Regress range of multiple
@@ -36,8 +32,8 @@ class FCOSHead(AnchorFreeHead):
         center_sample_radius (float): Radius of center sampling. Default: 1.5.
         norm_on_bbox (bool): If true, normalize the regression targets
             with FPN strides. Default: False.
-        centerness_on_reg (bool): If true, position centerness on the
-            regress branch. Please refer to https://github.com/tianzhi0549/FCOS/issues/89#issuecomment-516877042.
+        centerness_on_reg (bool): If true, position centerness on the regress branch. 
+            Please refer to https://github.com/tianzhi0549/FCOS/issues/89#issuecomment-516877042.
             Default: False.
         conv_bias (bool | str): If specified as `auto`, it will be decided by the
             norm_cfg. Bias of conv will be set as True if `norm_cfg` is None, otherwise
@@ -55,15 +51,10 @@ class FCOSHead(AnchorFreeHead):
         >>> assert len(cls_score) == len(self.scales)
     """  # noqa: E501
 
-    def __init__(self,
-                 num_classes,
-                 in_channels,
-                 regress_ranges=((-1, 64), (64, 128), (128, 256), (256, 512),
-                                 (512, INF)),
-                 center_sampling=False,
-                 center_sample_radius=1.5,
-                 norm_on_bbox=False,
-                 centerness_on_reg=False,
+    def __init__(self,num_classes,in_channels,
+                 regress_ranges=((-1, 64), (64, 128), (128, 256), (256, 512),(512, INF)),
+                 center_sampling=False,center_sample_radius=1.5,
+                 norm_on_bbox=False,centerness_on_reg=False,
                  loss_cls=dict(
                      type='FocalLoss',
                      use_sigmoid=True,
@@ -75,28 +66,36 @@ class FCOSHead(AnchorFreeHead):
                      type='CrossEntropyLoss',
                      use_sigmoid=True,
                      loss_weight=1.0),
-                 norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
-                 **kwargs):
+                 norm_cfg=dict(type='GN', num_groups=32, requires_grad=True), **kwargs):
         self.regress_ranges = regress_ranges
         self.center_sampling = center_sampling
         self.center_sample_radius = center_sample_radius
         self.norm_on_bbox = norm_on_bbox
         self.centerness_on_reg = centerness_on_reg
-        super().__init__(
-            num_classes,
-            in_channels,
-            loss_cls=loss_cls,
-            loss_bbox=loss_bbox,
-            norm_cfg=norm_cfg,
-            **kwargs)
+        super().__init__(num_classes,in_channels,loss_cls=loss_cls,loss_bbox=loss_bbox,norm_cfg=norm_cfg,**kwargs)
         self.loss_centerness = build_loss(loss_centerness)
         if kwargs['train_cfg'] is None:
             self.debug = False
         else:
             self.debug = kwargs['train_cfg'].debug
 
+    '''
+    self.scales:分别代表P3-P7的scale，实际数值都是1
+    ModuleList(
+      (0): Scale() tensor(1., device='cuda:0', requires_grad=True)
+      (1): Scale() tensor(1., device='cuda:0', requires_grad=True)
+      (2): Scale() tensor(1., device='cuda:0', requires_grad=True)
+      (3): Scale() tensor(1., device='cuda:0', requires_grad=True)
+      (4): Scale() tensor(1., device='cuda:0', requires_grad=True)
+    )
+    feat：长度为5的元组，分别对应P3-P7的输出，[5][batchsize, 256, H_i, W_i]
+    FCOSHead继承了 anchor_free head ，anchor_free head对class、regress、
+    centerness的几个卷积层进行了构建
+    '''
     def _init_layers(self):
+
         """Initialize layers of the head."""
+
         super()._init_layers()
         self.conv_centerness = nn.Conv2d(self.feat_channels, 1, 3, padding=1)
         self.scales = nn.ModuleList([Scale(1.0) for _ in self.strides])
@@ -107,6 +106,7 @@ class FCOSHead(AnchorFreeHead):
         normal_init(self.conv_centerness, std=0.01)
 
     def forward(self, feats):
+        ''''''
         """Forward features from the upstream network.
 
         Args:
@@ -128,6 +128,7 @@ class FCOSHead(AnchorFreeHead):
                            self.strides)
 
     def forward_single(self, x, scale, stride):
+        ''''''
         """Forward features of a single scale levle.
 
         Args:
@@ -158,30 +159,26 @@ class FCOSHead(AnchorFreeHead):
             bbox_pred = bbox_pred.exp()
         return cls_score, bbox_pred, centerness
 
-    def loss(self,
-             cls_scores,
-             bbox_preds,
-             centernesses,
-             gt_bboxes,
-             gt_labels,
-             img_metas,
-             gt_bboxes_ignore=None):
+    def loss(self,cls_scores, bbox_preds,centernesses,gt_bboxes,gt_labels,img_metas,gt_bboxes_ignore=None):
+        ''''''
         """Compute loss of the head.
 
         Args:
             cls_scores (list[Tensor]): Box scores for each scale level,
                 each is a 4D-tensor, the channel number is
-                num_points * num_classes.
+                num_points * num_classes.   [batchsize,80,H_i,W_i]
             bbox_preds (list[Tensor]): Box energies / deltas for each scale
                 level, each is a 4D-tensor, the channel number is
-                num_points * 4.
+                num_points * 4.   [batchsize,4,H_i,W_i] 
             centernesses (list[Tensor]): Centerss for each scale level, each
-                is a 4D-tensor, the channel number is num_points * 1.
+                is a 4D-tensor, the channel number is num_points * 1.  [batchsize,1,H_i,W_i]
             gt_bboxes (list[Tensor]): Ground truth bboxes for each image with
-                shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
-            gt_labels (list[Tensor]): class indices corresponding to each box
+                shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format. [batchsize][num_obj,4]
+            gt_labels (list[Tensor]): class indices corresponding to each box [batchsize][num_obj]
             img_metas (list[dict]): Meta information of each image, e.g.,
                 image size, scaling factor, etc.
+                [batchsize][(dict)dict_keys(['filename', 'ori_shape', 'img_shape', 'pad_shape', 
+                                                       'scale_factor', 'flip', 'img_norm_cfg'])]
             gt_bboxes_ignore (None | list[Tensor]): specify which bounding
                 boxes can be ignored when computing the loss.
 
@@ -189,11 +186,21 @@ class FCOSHead(AnchorFreeHead):
             dict[str, Tensor]: A dictionary of loss components.
         """
         assert len(cls_scores) == len(bbox_preds) == len(centernesses)
-        featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
-        all_level_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,
-                                           bbox_preds[0].device)
-        labels, bbox_targets = self.get_targets(all_level_points, gt_bboxes,
-                                                gt_labels)
+        featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]  # P3-P7特征图的大小
+        '''
+        [
+         torch.Size([100, 152]),
+         torch.Size([50, 76]),
+         torch.Size([25, 38]),
+         torch.Size([13, 19]),
+         torch.Size([7, 10])
+         ]
+           特征图的大小就相当于把原图分为多大的grid，特征图每个像素映射到原图就是该grid的中心点，不同大小的特征图就有不同的grid
+           # bbox_preds[0].dtype:torch.float32
+           # all_level_points:(list) [5][n_points][2]
+        '''
+        all_level_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,bbox_preds[0].device)
+        labels, bbox_targets = self.get_targets(all_level_points, gt_bboxes,gt_labels)
 
         if self.debug:
             is_upsample = False  # 是否采用上采样可视化模式
@@ -313,14 +320,7 @@ class FCOSHead(AnchorFreeHead):
             loss_bbox=loss_bbox,
             loss_centerness=loss_centerness)
 
-    def get_bboxes(self,
-                   cls_scores,
-                   bbox_preds,
-                   centernesses,
-                   img_metas,
-                   cfg=None,
-                   rescale=False,
-                   with_nms=True):
+    def get_bboxes(self,cls_scores,bbox_preds,centernesses,img_metas,cfg=None,rescale=False,with_nms=True):
         """Transform network output for a batch into bbox predictions.
 
         Args:
